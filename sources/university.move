@@ -5,10 +5,14 @@ module university::university;
 
 // For Move coding conventions, see
 // https://docs.sui.io/concepts/sui-move-concepts/conventions
-
+#[allow(duplicate_alias)]
 module university::elections {
     // Import the event module
     use sui::event;
+    use sui::object::{Self, UID, ID};
+    use sui::tx_context::{Self, TxContext};
+    use sui::transfer;
+    use std::vector;
 
     // Public event structs
     public struct ElectionCreated has copy, drop {
@@ -43,7 +47,6 @@ module university::elections {
         assert!(vector::length(&candidates) > 1, 100); // Ensure at least two candidates
 
         let uid = object::new(ctx); // Create a new UID
-
         let mut votes = vector::empty<u64>();
         let length = vector::length(&candidates);
         let mut i = 0;
@@ -51,8 +54,11 @@ module university::elections {
         while (i < length) {
             vector::push_back(&mut votes, 0); // Initialize votes for each candidate
             i = i + 1;
-        }
-
+        };
+        
+        // Get the election ID for the event before creating the Election object
+        let id_copy = object::uid_to_inner(&uid);
+        
         // Create the Election object
         let election = Election { 
             id: uid, 
@@ -67,9 +73,9 @@ module university::elections {
 
         // Emit an event
         event::emit(ElectionCreated {
-            election_id: object::uid_to_inner(&uid),
-            name: copy name,
-            candidates: copy candidates,
+            election_id: id_copy,
+            name,
+            candidates,
         });
     }
 
@@ -83,7 +89,7 @@ module university::elections {
         assert!(candidate_index < vector::length(&election.candidates), 102); // Ensure the candidate index is valid
 
         // Increment the vote count for the selected candidate
-        let vote_count = vector::borrow_mut(&mut election.votes, candidate_index);
+        let mut vote_count = vector::borrow_mut(&mut election.votes, candidate_index);
         *vote_count = *vote_count + 1;
 
         // Emit an event
