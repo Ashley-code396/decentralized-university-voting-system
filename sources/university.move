@@ -47,10 +47,12 @@ module university::elections {
         assert!(vector::length(&candidates) > 1, 100); // Ensure at least two candidates
 
         let uid = object::new(ctx); // Create a new UID
-        let mut votes = vector::empty<u64>();
-        let length = vector::length(&candidates);
+        let mut votes = vector::empty<u64>();//mut means the value of i can be changed later
+        let length = vector::length(&candidates);//let initialize the variable at the time of declaration
         let mut i = 0;
-
+// Gets the total number of candidates (length).
+// Loops through each candidate and adds a 0 to the votes vector.
+// The votes vector stores vote counts in the same order as candidates.
         while (i < length) {
             vector::push_back(&mut votes, 0); // Initialize votes for each candidate
             i = i + 1;
@@ -62,14 +64,16 @@ module university::elections {
         // Create the Election object
         let election = Election { 
             id: uid, 
-            name: copy name, 
-            candidates: copy candidates, 
-            votes, 
+            name: copy name, // copied from the function parameter.
+            candidates: copy candidates, // copied from the function parameter.
+            votes, // initialized so each candidate starts with zero votes.
             is_active: true 
         };
 
         // Transfer the Election object to the sender
-        transfer::transfer(election, tx_context::sender(ctx));
+        transfer::transfer(election, tx_context::sender(ctx));// Moves ownership of the election to the creator.
+                                              // Prevents loss of the election object.
+                                             // Ensures security—only the owner can manage the election later.
 
         // Emit an event
         event::emit(ElectionCreated {
@@ -86,7 +90,7 @@ module university::elections {
         _ctx: &TxContext
     ) {
         assert!(election.is_active, 101); // Ensure the election is active
-        assert!(candidate_index < vector::length(&election.candidates), 102); // Ensure the candidate index is valid
+        assert!(candidate_index < vector::length(&election.candidates), 102); //  Ensures the voter is selecting a valid candidate.
 
         // Increment the vote count for the selected candidate
         let mut vote_count = vector::borrow_mut(&mut election.votes, candidate_index);
@@ -104,7 +108,7 @@ module university::elections {
         election: &mut Election,
         ctx: &TxContext
     ) {
-        assert!(election.is_active, 103); // Ensure the election is active
+        assert!(election.is_active, 103); //Ensures that the election is still open before closing it
         assert!(tx_context::sender(ctx) == object::uid_to_address(&election.id), 104); // Ensure the caller is the owner
 
         // Mark the election as closed
@@ -118,7 +122,7 @@ module university::elections {
 
     // View election results
     public fun view_results(election: &Election): vector<u64> {
-        assert!(!election.is_active, 105); // Ensure the election is closed
-        *&election.votes
+        assert!(!election.is_active, 105); // Ensures that results can only be viewed after the election is closed
+        *&election.votes  //Retrieves the vector of votes, where each index corresponds to a candidate
     }
 }
