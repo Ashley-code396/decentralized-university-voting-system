@@ -8,41 +8,42 @@ module university::university;
 #[allow(duplicate_alias)]
 module university::election {
     use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
     use sui::event;
 
     // Struct to represent a student's voting NFT
     public struct StudentVoterNFT has key, store {
-        id: UID,                    // Unique identifier for the NFT
-        name: vector<u8>,           // Name of the NFT
-        description: vector<u8>,    // Description of the NFT
-        image_url: vector<u8>,      // URL of the NFT's image
-        student_id: u64,            // Unique student ID
-        voting_power: u64,          // Voting power (can be updated)
-        is_graduated: bool,         // Graduation status
+        id: UID,
+        name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        student_id: u64,
+        voting_power: u64,
+        is_graduated: bool,
+        last_updated: u64, // Added field
     }
 
     // Struct to represent a candidate
     public struct Candidate has key, store {
         id: UID,
-        student_id: u64,            // Candidate's student ID
-        name: vector<u8>,           // Candidate's name
-        campaign_promises: vector<u8>, // Candidate's campaign promises
-        vote_count: u64,            // Total votes received
+        student_id: u64,
+        name: vector<u8>,
+        campaign_promises: vector<u8>,
+        vote_count: u64,
     }
 
     // Struct to represent a vote
     public struct Vote has key, store {
         id: UID,
-        voter_id: u64,              // Voter's student ID
-        candidate_id: u64,          // Candidate's student ID
+        voter_id: u64,
+        candidate_id: u64,
     }
 
     // Struct to store election results
     public struct ElectionResult has key, store {
         id: UID,
-        candidate_id: u64,          // Candidate's student ID
-        total_votes: u64,           // Total votes received by the candidate
+        candidate_id: u64,
+        total_votes: u64,
     }
 
     // Events
@@ -77,14 +78,15 @@ module university::election {
 
     // Function to create a new student voting NFT
     public fun create_student_voting_nft(student_id: u64, ctx: &mut TxContext): StudentVoterNFT {
-        let voter_nft = StudentVoterNFT {  //instantiating the StudentVoterNFT struct
+        let voter_nft = StudentVoterNFT {
             id: object::new(ctx),
             name: b"University Voter ID",
             description: b"This is a unique voter ID for university elections.",
-            image_url: b"https://example.com/voter-nft.png",//image url placeholder
+            image_url: b"https://i.ibb.co/h1KD5V3D/profile-image-erp.jpg",
             student_id,
             voting_power: 1,
             is_graduated: false,
+            last_updated: tx_context::epoch(ctx), // Initialize with the current epoch timestamp
         };
 
         event::emit(StudentVoterNFTCreated {
@@ -96,10 +98,6 @@ module university::election {
     }
 
     // Helper function to convert u64 to vector<u8> (string representation)
-
-//The conversion from u64 to vector<u8> is necessary to represent numbers as human-readable strings
-//Ensure consistency, reduce frontend complexity
-
     fun u64_to_vector(value: u64): vector<u8> {
         let mut result: vector<u8> = vector::empty();
         let mut temp = value;
@@ -127,21 +125,25 @@ module university::election {
     }
 
     // Function to update voting power yearly (simulate academic progression)
-    public fun update_voting_power(voter_nft: &mut StudentVoterNFT) {
-        assert!(!voter_nft.is_graduated, 0); // Error code 0
-        voter_nft.voting_power = voter_nft.voting_power + 1;
+    public fun update_voting_power(voter_nft: &mut StudentVoterNFT, current_time: u64) {
+        assert!(!voter_nft.is_graduated, 0); // Ensure student is active
 
-        // Automatically update NFT description to reflect new voting power
-        let mut new_description = b"Your voting power is now: ";
-        let voting_power_str = u64_to_vector(voter_nft.voting_power);
-        vector::append(&mut new_description, voting_power_str);
+        let time_elapsed = current_time - voter_nft.last_updated;
+        if (time_elapsed >= 365 * 24 * 60 * 60) { // 365 days in seconds
+            voter_nft.voting_power = voter_nft.voting_power + 1;
+            voter_nft.last_updated = current_time;
 
-        voter_nft.description = new_description;
+            // Update NFT description
+            let mut new_description = b"Your voting power is now: ";
+            let voting_power_str = u64_to_vector(voter_nft.voting_power);
+            vector::append(&mut new_description, voting_power_str);
+            voter_nft.description = new_description;
 
-        event::emit(VotingPowerUpdated {
-            student_id: voter_nft.student_id,
-            new_voting_power: voter_nft.voting_power,
-        });
+            event::emit(VotingPowerUpdated {
+                student_id: voter_nft.student_id,
+                new_voting_power: voter_nft.voting_power,
+            });
+        }
     }
 
     // Function to mark a student as graduated (deactivates voting rights)
@@ -190,7 +192,6 @@ module university::election {
         };
 
         // Apply vote weight based on voting power
-        //The candidate's total votes are increased by the voting power of the voter
         candidate.vote_count = candidate.vote_count + voter_nft.voting_power;
 
         event::emit(VoteCast {
@@ -225,7 +226,7 @@ module university::election {
                 total_votes,
             });
 
-            i = i + 1; //Loop counter i is incremented to move to the next candidate in the candidates vector.
+            i = i + 1;
         };
         (results, votes, candidates)
     }
