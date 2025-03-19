@@ -11,6 +11,7 @@ module university::election {
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::event;
+    use sui::transfer;
 
     // Struct to represent a student's voting NFT
     public struct StudentVoterNFT has key, store {
@@ -78,19 +79,15 @@ module university::election {
     }
 
     // Function to create a new student voting NFT
-    public fun create_student_voting_nft(student_id: u64, ctx: &mut TxContext): StudentVoterNFT {
+    public entry fun create_student_voting_nft(student_id: u64, ctx: &mut TxContext) {
         // Validate student_id is within u64 range
         assert!(student_id <= 18446744073709551615, 0);
 
+        // Get the current epoch and ensure it fits within u64 range
+        let current_epoch = tx_context::epoch(ctx);
+        assert!(current_epoch <= 18446744073709551615, 100); // Error code 100 if epoch is too large
 
-
-    // Get the current epoch and ensure it fits within u64 range
-    let current_epoch = tx_context::epoch(ctx);
-    assert!(current_epoch <= 18446744073709551615, 100); // Error code 100 if epoch is too large
-
-
-
-
+        // Create the NFT object
         let voter_nft = StudentVoterNFT {
             id: object::new(ctx),
             name: b"University Voter ID",
@@ -102,12 +99,14 @@ module university::election {
             last_updated: current_epoch, // Use the validated epoch value
         };
 
+        // Transfer the NFT to the transaction sender
+        transfer::transfer(voter_nft, tx_context::sender(ctx));
+
+        // Emit an event to indicate the NFT was created
         event::emit(StudentVoterNFTCreated {
             student_id,
             voting_power: 1,
         });
-
-        voter_nft
     }
 
     // Helper function to convert u64 to vector<u8> (string representation)
@@ -138,7 +137,7 @@ module university::election {
     }
 
     // Function to update voting power yearly (simulate academic progression)
-    public fun update_voting_power(voter_nft: &mut StudentVoterNFT, current_time: u64) {
+    public entry fun update_voting_power(voter_nft: &mut StudentVoterNFT, current_time: u64) {
         assert!(!voter_nft.is_graduated, 0); // Ensure student is active
 
         let time_elapsed = current_time - voter_nft.last_updated;
@@ -160,7 +159,7 @@ module university::election {
     }
 
     // Function to mark a student as graduated (deactivates voting rights)
-    public fun graduate_student(voter_nft: &mut StudentVoterNFT) {
+    public entry fun graduate_student(voter_nft: &mut StudentVoterNFT) {
         voter_nft.is_graduated = true;
         voter_nft.voting_power = 0;
 
@@ -175,7 +174,7 @@ module university::election {
     }
 
     // Function to register a candidate
-    public fun register_candidate(voter_nft: &StudentVoterNFT, name: vector<u8>, campaign_promises: vector<u8>, ctx: &mut TxContext): Candidate {
+    public entry fun register_candidate(voter_nft: &StudentVoterNFT, name: vector<u8>, campaign_promises: vector<u8>, ctx: &mut TxContext) {
         assert!(voter_nft.voting_power >= 3, 1); // Only Juniors and Seniors can run (3+ votes)
 
         let candidate = Candidate {
@@ -186,16 +185,17 @@ module university::election {
             vote_count: 0,
         };
 
+        // Transfer the candidate object to the transaction sender
+        transfer::transfer(candidate, tx_context::sender(ctx));
+
         event::emit(CandidateRegistered {
             student_id: voter_nft.student_id,
             name,
         });
-
-        candidate
     }
 
     // Function to cast a vote
-    public fun cast_vote(voter_nft: &StudentVoterNFT, candidate: &mut Candidate, ctx: &mut TxContext): Vote {
+    public entry fun cast_vote(voter_nft: &StudentVoterNFT, candidate: &mut Candidate, ctx: &mut TxContext) {
         assert!(!voter_nft.is_graduated, 2); // Ensure voter is active
 
         let vote = Vote {
@@ -207,40 +207,46 @@ module university::election {
         // Apply vote weight based on voting power
         candidate.vote_count = candidate.vote_count + voter_nft.voting_power;
 
+        // Transfer the vote object to the transaction sender
+        transfer::transfer(vote, tx_context::sender(ctx));
+
         event::emit(VoteCast {
             voter_id: voter_nft.student_id,
             candidate_id: candidate.student_id,
         });
-
-        vote
     }
 
-    // Function to tally votes and declare results
-    public fun tally_votes(
-        votes: vector<Vote>,
-        candidates: vector<Candidate>,
-        ctx: &mut TxContext
-    ): (vector<ElectionResult>, vector<Vote>, vector<Candidate>) {
-        let mut results: vector<ElectionResult> = vector::empty();
-        let mut i = 0;
-        while (i < vector::length(&candidates)) {
-            let candidate = vector::borrow(&candidates, i);
-            let total_votes = candidate.vote_count;
+   public entry fun tally_votes(
+    _votes: vector<Vote>, // Mark as unused
+    candidates: vector<Candidate>, // Consume or mark as unused
+    ctx: &mut TxContext
+) {
+    let mut i = 0;
+    while (i < vector::length(&candidates)) {
+        let candidate = vector::borrow(&candidates, i);
+        let total_votes = candidate.vote_count;
 
-            vector::push_back(&mut results, ElectionResult {
-                id: object::new(ctx),
-                candidate_id: candidate.student_id,
-                total_votes,
-            });
-
-            // Emit event for each candidate's result
-            event::emit(ElectionResultsTallied {
-                candidate_id: candidate.student_id,
-                total_votes,
-            });
-
-            i = i + 1;
+        // Create an ElectionResult object
+        let result = ElectionResult {
+            id: object::new(ctx),
+            candidate_id: candidate.student_id,
+            total_votes,
         };
-        (results, votes, candidates)
-    }
+
+        // Transfer the result to the transaction sender
+        transfer::transfer(result, tx_context::sender(ctx));
+
+        // Emit event for each candidate's result
+        event::emit(ElectionResultsTallied {
+            candidate_id: candidate.student_id,
+            total_votes,
+        });
+
+        i = i + 1;
+    };
+
+    // Explicitly consume the _votes and candidates vectors
+    vector::destroy_empty(_votes);
+    vector::destroy_empty(candidates);
+}
 }
