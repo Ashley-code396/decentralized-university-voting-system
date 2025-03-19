@@ -5,6 +5,7 @@ module university::university;
 
 // For Move coding conventions, see
 // https://docs.sui.io/concepts/sui-move-concepts/conventions
+/// Module: university
 #[allow(duplicate_alias)]
 module university::election {
     use sui::object::{Self, UID};
@@ -78,6 +79,18 @@ module university::election {
 
     // Function to create a new student voting NFT
     public fun create_student_voting_nft(student_id: u64, ctx: &mut TxContext): StudentVoterNFT {
+        // Validate student_id is within u64 range
+        assert!(student_id <= 18446744073709551615, 0);
+
+
+
+    // Get the current epoch and ensure it fits within u64 range
+    let current_epoch = tx_context::epoch(ctx);
+    assert!(current_epoch <= 18446744073709551615, 100); // Error code 100 if epoch is too large
+
+
+
+
         let voter_nft = StudentVoterNFT {
             id: object::new(ctx),
             name: b"University Voter ID",
@@ -86,7 +99,7 @@ module university::election {
             student_id,
             voting_power: 1,
             is_graduated: false,
-            last_updated: tx_context::epoch(ctx), // Initialize with the current epoch timestamp
+            last_updated: current_epoch, // Use the validated epoch value
         };
 
         event::emit(StudentVoterNFTCreated {
